@@ -1,0 +1,12 @@
+[Unit]
+Description=KNIME Executor Per-User
+After=network.target knime-server.service
+
+[Service]
+Type=simple
+
+ExecStart=/bin/sh -c '/path/to/knime_executor_per_user_starter.sh'
+TimeoutStartSec=0
+
+[Install]
+WantedBy=default.target
