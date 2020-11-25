@@ -1,3 +1,4 @@
+
 # knime-per-user-executor-starter
 This repository contains a Python script (and auxiliary files) to allow KNIME to start Executor processes for each user that submit jobs. An started KNIME Executor processes runs with the same OS user as the one who submitted the job.
 
@@ -7,7 +8,7 @@ When KNIME is running with distributed Executors, i.e. KNIME Executors are runni
 
 However, there may be situations in which we need to run per-user Executors. In this scenario, when a user submits a job, that job will be executed in a KNIME Executor that is running with the same OS user as the user that submitted the job, and not with a service account. Situations where this may be helpful are:
 - You need to access data sources for which there are not KNIME nodes that enable the access, but for which there is an OS method to do it. An example is to access network drives such as Samba or NFS with Kerberos. Currently KNIME does not have connectors for them, though it is possible to access Samba 3 without Kerberos using the nodes in the Erlwood extension (https://hub.knime.com/erlwood_cheminf/extensions/org.erlwood.features.core.base/latest). Therefore, a way to provide access is to mount the network drives at OS level and then have the per-user Executor access them. In this manner it is possible to use the user-based authorization rules that may have been setup for the network drives.
-- You need direct auditing capabilites and need to easily know which user did what. When Executors run with a service account, in order to find out which user did what, one needs to cross-match the jobId on the Executor log (knime.log) with the information on the server logs. When Executors run per-user, each user has its own log file so there is not need to check the server logs to find out who did what.
+- You need direct auditing capabilities and need to easily know which user did what. When Executors run with a service account, in order to find out which user did what, one needs to cross-match the jobId on the Executor log (knime.log) with the information on the server logs. When Executors run per-user, each user has its own log file so there is no need to check the server logs to find out who did what.
 
 ## Procedure
 
@@ -28,7 +29,7 @@ In order to run this solution one needs:
 - A Python 3 environment ready-to-use with pika and psutil on the Executor machines.
 - Download this repository which includes knime_executor_per_user_starter.py to start KNIME Executors on-demand; the configuration file for the Python script (knime_executor_per_user_starter.config); a bash script template to execute the Python script (knime_executor_per_user_starter.sh); and a file (knime-executor-per-user.service) to add the Python script as a service so it starts automatically on-boot.
 - A plugin (JAR file) to autoterminate idle Executors. The file is called com.knime.enterprise.executor.autoshutdown_[version].jar. Contact KNIME support to download this plugin.
-- Prope licensing schema - note each KNIME Executor process will acquire core tokens from the KNIME Server, therefore you need to configure the Executors accordingly (via knime.ini) to avoid asking too many cores per process depending on the number of users you will have. Otherwise starting processes will fail since all tokens will be used.
+- Proper licensing schema - note each KNIME Executor process will acquire core tokens from the KNIME Server, therefore you need to configure the Executors accordingly (via knime.ini) to avoid asking too many cores per process depending on the number of users you will have. Otherwise starting processes will fail since all tokens will be used.
 
 ## Installation steps
 ### Steps on KNIME Server
@@ -62,7 +63,7 @@ cd /path/to/workspaces
 chmod 777 ../workspaces
 ```
 
-4-	Edit the knime_executor_per_user_starter.config accordingly. Default configuration sets rotation of the Python script log to one per day and keep them for 90 days. If RabbitMQ usses SSL encryption, specify the CA certificate is needed, change the port to 5671 and specify the protocol is amqps. You will also need to provide the credentials for RabbitMQ, and the installation (home) folder for the KNIME executor (which should contain the knime executable). It is also needed to specify the folder in which the KNIME workspaces will be created, one for each user. Finally, if there is some KNIME user that is not in LDAP but it is on the local KNIME user base, specify the mapping for that user to which LDAP user is going to be used.
+4-	Edit the knime_executor_per_user_starter.config accordingly. Default configuration sets rotation of the Python script log to one per day and keep them for 90 days. If RabbitMQ uses SSL encryption, specify the CA certificate is needed, change the port to 5671 and specify the protocol is amqps. You will also need to provide the credentials for RabbitMQ, and the installation (home) folder for the KNIME executor (which should contain the knime executable). It is also needed to specify the folder in which the KNIME workspaces will be created, one for each user. Finally, if there is some KNIME user that is not in LDAP but it is on the local KNIME user base, specify the mapping for that user to which LDAP user is going to be used.
 
 5-	Ensure you have a valid Python 3 environment which contains the required Python module (pika and psutil)
 ```
