@@ -1,3 +1,9 @@
+"""
+Python Script for starting KNIME Executor processes for each user when a job is added into RabbitMQ. The started KNIME Executor process will run with the same OS user as the user that submitted the job
+
+author: oscar.martinez@clearpeaks.com
+"""
+
 import pika
 import psutil
 import os
