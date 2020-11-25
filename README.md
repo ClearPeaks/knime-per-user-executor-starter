@@ -16,16 +16,10 @@ When a user submits a job via KNIME Web Portal or via KNIME Analytics Platform (
 
 A plugin that is added in KNIME Executor installation (in the dropins folder) takes care to auto-terminate executors that have been unused for a while. 
 
-## Users mapping
-This solutions requires that KNIME Server users are synchronized with LDAP and that OS users in the Executor VMs are also synchronized with the same LDAP. The latter can be achieved for example using SSSD.
-
-Note that because the Python script needs to start processes under different OS users it is required to run this solution using root.
-
-Note that it may happen that a user that submits a job has never logged in into the KNIME Executor machines. A KNIME Executor process will write some Java and Eclipse preference files in the home folder of the user running the process. When the user has not logged in into the machine (which is actually what we want since we do not want users able to login into these machines), the home folder needs to be created prior to running the KNIME Executor with that user, otherwise the KNIME process will fail – this is taken care of by the Python script. The script creates the home folder if it does not exist.
-
 ## Requirements
 In order to run this solution one needs:
 - A KNIME enterprise deployment (with RabbitMQ and distributed executors). This solution has been tested to work with KNIME Executors version 4.2.2 and KNIME Server 4.11
+- KNIME Server users must be synchronized with LDAP and OS users in the Executor VMs are also synchronized with the same LDAP -this can be achieved for example using SSSD. Note that because the Python script needs to start processes under different OS users it is required to run this solution using root. Note that it may happen that a user that submits a job has never logged in into the KNIME Executor machines. A KNIME Executor process will write some Java and Eclipse preference files in the home folder of the user running the process. When the user has not logged in into the machine (which is actually what we want since we do not want users able to login into these machines), the home folder needs to be created prior to running the KNIME Executor with that user, otherwise the KNIME process will fail – this is taken care of by the Python script. The script creates the home folder if it does not exist.
 - A Python 3 environment ready-to-use with pika and psutil on the Executor machines.
 - Download this repository which includes knime_executor_per_user_starter.py to start KNIME Executors on-demand; the configuration file for the Python script (knime_executor_per_user_starter.config); a bash script template to execute the Python script (knime_executor_per_user_starter.sh); and a file (knime-executor-per-user.service) to add the Python script as a service so it starts automatically on-boot.
 - A plugin (JAR file) to autoterminate idle Executors. The file is called com.knime.enterprise.executor.autoshutdown_[version].jar. Contact KNIME support to download this plugin.
