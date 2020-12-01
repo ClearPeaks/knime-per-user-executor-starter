@@ -122,8 +122,29 @@ def start_process(knime_user_name, os_user_name):
     env['KNIME_EXECUTOR_MSGQ'] = knime_executor_msgq
     # TODO - add quotes '{}' - in version 4.11.3 -> replace (user = {}) by (user = '{}')
     env['KNIME_EXECUTOR_RESERVATION'] = "(user = {})".format(knime_user_name)
+    
+    knime_workspace = knime_workspace_to_format.format(os_user_name)
+    knime_tempdir = knime_workspace + '_temp'
+    env['KNIME_EXECUTOR_TEMP_DIR'] = knime_tempdir
+    
+    if not os.path.exists(knime_workspace):
+        logger.info('Workspace directory for user {} did not exist. Creating and setting proper ownership'.format(os_user_name))
+        os.system('mkdir {}'.format(knime_workspace))
+        os.system('chown -R {}:root {}'.format(os_user_name, knime_workspace))
+        os.system('chmod -R 700 {}'.format(knime_workspace))
+        os.system('setfacl -d -m g::--- {}'.format(knime_workspace))
+        os.system('setfacl -d -m o::--- {}'.format(knime_workspace))
+    
+    if not os.path.exists(knime_tempdir):
+        logger.info('Temp directory for user {} did not exist. Creating and setting proper ownership'.format(os_user_name))
+        os.system('mkdir {}'.format(knime_tempdir))
+        os.system('chown -R {}:root {}'.format(os_user_name, knime_tempdir))
+        os.system('chmod -R 700 {}'.format(knime_tempdir))
+        os.system('setfacl -d -m g::--- {}'.format(knime_tempdir))
+        os.system('setfacl -d -m o::--- {}'.format(knime_tempdir))
+    
     process = subprocess.Popen(
-        knime_start_to_format.format(knime_workspace_to_format.format(os_user_name)), preexec_fn=demote(user_uid, user_gid), cwd=settings['knime_home'], env=env, shell=True
+        knime_start_to_format.format(knime_workspace), preexec_fn=demote(user_uid, user_gid), cwd=settings['knime_home'], env=env, shell=True
     )
    
     logger.info('Process started for user {}. PID is: {}'.format(os_user_name, process.pid))
