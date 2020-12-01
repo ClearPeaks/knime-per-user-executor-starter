@@ -9,6 +9,7 @@ When KNIME is running with distributed Executors, i.e. KNIME Executors are runni
 However, there may be situations in which we need to run per-user Executors. In this scenario, when a user submits a job, that job will be executed in a KNIME Executor that is running with the same OS user as the user that submitted the job, and not with a service account. Situations where this may be helpful are:
 - You need to access data sources for which there are not KNIME nodes that enable the access, but for which there is an OS method to do it. An example is to access network drives such as Samba or NFS with Kerberos. Currently KNIME does not have connectors for them, though it is possible to access Samba 3 without Kerberos using the nodes in the Erlwood extension (https://hub.knime.com/erlwood_cheminf/extensions/org.erlwood.features.core.base/latest). Therefore, a way to provide access is to mount the network drives at OS level and then have the per-user Executor access them. In this manner it is possible to use the user-based authorization rules that may have been setup for the network drives.
 - You need direct auditing capabilities and need to easily know which user did what. When Executors run with a service account, in order to find out which user did what, one needs to cross-match the jobId on the Executor log (knime.log) with the information on the server logs. When Executors run per-user, each user has its own log file so there is no need to check the server logs to find out who did what.
+- You need complete environment isolation for each user - the jobs running on the KNIME Executor machines for each user are sealed and their intermediate data is unaccessible by other users.
 
 ## Procedure
 
@@ -19,7 +20,9 @@ A plugin that is added in KNIME Executor installation (in the dropins folder) ta
 ## Requirements
 In order to run this solution one needs:
 - A KNIME enterprise deployment (with RabbitMQ and distributed executors). This solution has been tested to work with KNIME Executors version 4.2.2 and KNIME Server 4.11
-- KNIME Server users must be synchronized with LDAP and OS users in the Executor VMs are also synchronized with the same LDAP -this can be achieved for example using SSSD. Note that because the Python script needs to start processes under different OS users it is required to run this solution using root. Note that it may happen that a user that submits a job has never logged in into the KNIME Executor machines. A KNIME Executor process will write some Java and Eclipse preference files in the home folder of the user running the process. When the user has not logged in into the machine (which is actually what we want since we do not want users able to login into these machines), the home folder needs to be created prior to running the KNIME Executor with that user, otherwise the KNIME process will fail – this is taken care of by the Python script. The script creates the home folder if it does not exist.
+- KNIME Server users must be synchronized with LDAP and OS users in the Executor VMs are also synchronized with the same LDAP -this can be achieved for example using SSSD. 
+- Root privileges on the KNIME Executor machines. Note that because the Python script needs to start processes under different OS users this solution needs root. Also note that a user who submits a job may never have logged in to the KNIME Executor machines. A KNIME Executor process will write some Java and Eclipse preference files in the home folder of the user running the process. When the user has not logged in to the machine (which is actually what we want since we do not want users able to log in to these machines), the home folder needs to be created prior to running the KNIME Executor with that user, otherwise the KNIME process will fail – this is taken care of by the Python script.
+- A file system that supports ACLs in the KNIME Executor machines. Each user will have its own workspace and temporal directory; and these will be isolated so that no other user can access them. This is achieved by using ACLs (this is managed by the Python script)
 - A Python 3 environment ready-to-use with pika and psutil on the Executor machines.
 - Download this repository which includes knime_executor_per_user_starter.py to start KNIME Executors on-demand; the configuration file for the Python script (knime_executor_per_user_starter.config); a bash script template to execute the Python script (knime_executor_per_user_starter.sh); and a file (knime-executor-per-user.service) to add the Python script as a service so it starts automatically on-boot.
 - A plugin (JAR file) to autoterminate idle Executors. The file is called com.knime.enterprise.executor.autoshutdown_[version].jar. Contact KNIME support to download this plugin.
@@ -29,14 +32,16 @@ In order to run this solution one needs:
 ### Steps on KNIME Server
 Perform the following on the KNIME Server.
 
-When a user starts using KNIME (for first time or after a while of not using it) his/her first job will trigger the starting of a KNIME Executor process in each Executor machine. Starting this process takes 10-20 seconds. Therefore we need to increase the default timeout (1min) to 2min so that KNIME Server waits a bit more before deciding no Executor is available. For this, modify the following line in knime-server.config: 
+1- When a user starts using KNIME (for first time or after a while of not using it) his/her first job will trigger the starting of a KNIME Executor process in each Executor machine. Starting this process takes 10-20 seconds. Therefore we need to increase the default timeout (1min) to 2min so that KNIME Server waits a bit more before deciding no Executor is available. For this, modify the following line in knime-server.config: 
 ```
 com.knime.server.job.default_load_timeout=2m
 ```
+Since the knime-server.config is stored in the workflow repository, there is no need to do this step multiple times if there are multiple KNIME Servers since these will be sharing the workflow repository. Important: there is also the need to update another timeout configuration (when opening an existing job) that is set now to 10 seconds. In next release of KNIME it will be possible to modify this.
 
-Since the knime-server.config is stored in the workflow repository, there is no need to do this step multiple times if there are multiple KNIME Servers since these will be sharing the workflow repository.
-
-Important: there is also the need to update another timeout configuration (when opening an existing job) that is set now to 10 seconds. In next release of KNIME it will be possible to modify this.
+2- Update the executor.epf file in the folder config/client-profiles/executor in the workflow repository. Add the following line to specify the tempdir:
+```
+/instance/org.knime.workbench.core/knime.tempDir=${env:KNIME_EXECUTOR_TEMP_DIR}
+```
 
 ### Steps on KNIME Executors
 Performs the following steps in all the machines that will run KNIME Executor:
@@ -81,9 +86,17 @@ chmod --reference knime dropins/*
 ```
 Since there will be one KNIME Executor process per user, you may also want to modify the -Dorg.knime.core.maxThreads property to meet the licensing deal. Remember 2 threads consume one 1 core token. If there are too many executors running that consume all tokens, new executors will fail to start. Similarly, you may want to edit the RAM that each KNIME Executor process with utilize with the -Xmx parameter.
 
+8- Modify again the knime.ini to configure the client-profile to be downloaded from the KNIME Server - this client profile will be used to indicate the tempdir is defined via a environment variable (which is set by the Python script). Add the following lines before the vmargs
+```
+-profileLocation
+[KNIME Server URL]/knime/rest/v4/profiles/contents
+-profileList
+executor
+```
+
 #### With the user that owns the installation directory:
 
-8-	Clean the installation of the executor:
+9-	Clean the installation of the executor:
 ```
 cd /path/to/knime_X.X.X
 ./knime -clean -application org.knime.product.KNIME_BATCH_APPLICATION
@@ -91,39 +104,39 @@ cd /path/to/knime_X.X.X
 
 #### With root: 
 
-9-	Edit knime_executor_per_user_starter.sh accordingly. 
+10-	Edit knime_executor_per_user_starter.sh accordingly. 
 
-10-	Make the shell script executable
+11-	Make the shell script executable
 ```
 chmod u+x knime_executor_per_user_starter.sh
 ```
 
-11-	Edit the knime-executor-per-user.service accordingly
+12-	Edit the knime-executor-per-user.service accordingly
 
-12-	Enable the service
+13-	Enable the service
 ```
 cp knime-executor-per-user.service /etc/systemd/system/
 systemctl daemon-reload
 systemctl enable knime-executor-per-user.service
 ```
 
-13-	You can start and stop the service with (leave it running)
+14-	You can start and stop the service with (leave it running)
 ```
 systemctl start knime-executor-per-user.service
 systemctl stop knime-executor-per-user.service
 ```
 
-14-	In case of error check the possible errors messages with:
+15-	In case of error check the possible errors messages with:
 ```
 journalctl -b --unit=knime-executor-per-user.service
 ```
 
-15-	If it was added before, disable the service to start the single KNIME Executor
+16-	If it was added before, disable the service to start the single KNIME Executor
 ```
 systemctl disable knime-executor.service
 ```
 
-16-	 Optionally you can try to reboot the VM and ensure the process has been started. To check that the process are running use:
+17-	 Optionally you can try to reboot the VM and ensure the process has been started. To check that the process are running use:
 ```
 ps aux | grep knime
 ```
