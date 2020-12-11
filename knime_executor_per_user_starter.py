@@ -222,7 +222,7 @@ while(True):
         context = ssl.create_default_context(cafile=settings['ca_cert_file'])
         ssl_options = None
         if settings['rabbitmq_protocol'] == 'amqps':
-            ssl_options = pika.SSLOptions(context, settings['rabbitmq_host_name'])
+            ssl_options = pika.SSLOptions(context, all_rabbitmq_hosts[0])
         credentials = pika.PlainCredentials(settings['rabbitmq_client_user'], settings['rabbitmq_client_password'])
         parameters = pika.ConnectionParameters(host=all_rabbitmq_hosts[0],
                                         port=settings['rabbitmq_port'],
