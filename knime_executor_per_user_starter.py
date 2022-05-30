@@ -233,7 +233,7 @@ while(True):
         connection = pika.BlockingConnection(parameters)
         channel = connection.channel()
         if settings['rabbitmq_exchange'] != '':
-            channel.exchange_declare(settings['rabbitmq_exchange'])
+            channel.exchange_declare(settings['rabbitmq_exchange'], durable=True)
         channel.basic_consume(settings['rabbitmq_queue_name'], on_message)
 
         try:
